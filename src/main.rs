@@ -1,127 +1,17 @@
-use rltk::{GameState, Rltk, VirtualKeyCode, RGB};
+use rltk::{GameState, Rltk, RGB};
 use specs::prelude::*;
-use specs_derive::Component;
-use std::cmp::{max, min};
 
-#[derive(Component)]
-struct Position {
-    x: i32,
-    y: i32,
-}
+mod components;
+pub use components::*;
+mod map;
+pub use map::*;
+mod player;
+pub use player::*;
+mod rect;
+pub use rect::Rect;
 
-#[derive(Component)]
-struct Renderable {
-    glyph: rltk::FontCharType,
-    fg: RGB,
-    bg: RGB,
-}
-
-#[derive(Component, Debug)]
-struct Player {}
-
-#[derive(PartialEq, Copy, Clone)]
-enum TileType {
-    Wall,
-    Floor,
-}
-
-struct State {
+pub struct State {
     ecs: World,
-}
-
-pub fn xy_index(x: i32, y: i32) -> usize {
-    (y as usize * 80) + x as usize
-}
-
-fn new_map() -> Vec<TileType> {
-    let mut map = vec![TileType::Floor; 80 * 50];
-
-    // Put walls on the borders
-    for x in 0..80 {
-        map[xy_index(x, 0)] = TileType::Wall;
-        map[xy_index(x, 49)] = TileType::Wall;
-    }
-    for y in 1..49 {
-        map[xy_index(0, y)] = TileType::Wall;
-        map[xy_index(79, y)] = TileType::Wall;
-    }
-
-    // Add walls in random locations
-    let mut rng = rltk::RandomNumberGenerator::new();
-
-    for _i in 0..400 {
-        let x = rng.roll_dice(1, 79);
-        let y = rng.roll_dice(1, 49);
-        let index = xy_index(x, y);
-        if index != xy_index(40, 25) {
-            map[index] = TileType::Wall;
-        }
-    }
-
-    map
-}
-
-fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
-    let mut positions = ecs.write_storage::<Position>();
-    let mut players = ecs.write_storage::<Player>();
-    let map = ecs.fetch::<Vec<TileType>>();
-
-    for (_player, pos) in (&mut players, &mut positions).join() {
-        let destination_index = xy_index(pos.x + delta_x, pos.y + delta_y);
-        if map[destination_index] != TileType::Wall {
-            pos.x = min(79, max(0, pos.x + delta_x));
-            pos.y = min(49, max(0, pos.y + delta_y));
-        }
-    }
-}
-
-fn player_input(gs: &mut State, ctx: &mut Rltk) {
-    // Player movement
-    match ctx.key {
-        None => {} // Nothing happened
-        Some(key) => match key {
-            VirtualKeyCode::Left => try_move_player(-1, 0, &mut gs.ecs),
-            VirtualKeyCode::Right => try_move_player(1, 0, &mut gs.ecs),
-            VirtualKeyCode::Up => try_move_player(0, -1, &mut gs.ecs),
-            VirtualKeyCode::Down => try_move_player(0, 1, &mut gs.ecs),
-            _ => {}
-        },
-    }
-}
-
-fn draw_map(map: &[TileType], ctx: &mut Rltk) {
-    let mut y = 0;
-    let mut x = 0;
-    for tile in map.iter() {
-        // Render a tile depending upon the tile type
-        match tile {
-            TileType::Floor => {
-                ctx.set(
-                    x,
-                    y,
-                    RGB::from_f32(0.5, 0.5, 0.5),
-                    RGB::from_f32(0., 0., 0.),
-                    rltk::to_cp437('.'),
-                );
-            }
-            TileType::Wall => {
-                ctx.set(
-                    x,
-                    y,
-                    RGB::from_f32(0.0, 1.0, 0.0),
-                    RGB::from_f32(0., 0., 0.),
-                    rltk::to_cp437('#'),
-                );
-            }
-        }
-
-        // Move the coordinates
-        x += 1;
-        if x > 79 {
-            x = 0;
-            y += 1;
-        }
-    }
 }
 
 impl GameState for State {
@@ -155,9 +45,16 @@ fn main() -> rltk::BError {
     gs.ecs.register::<Renderable>();
     gs.ecs.register::<Player>();
 
+    let (rooms, map) = new_map();
+    gs.ecs.insert(map);
+    let (player_x, player_y) = rooms[0].center();
+
     gs.ecs
         .create_entity()
-        .with(Position { x: 40, y: 25 })
+        .with(Position {
+            x: player_x,
+            y: player_y,
+        })
         .with(Renderable {
             glyph: rltk::to_cp437('@'),
             fg: RGB::named(rltk::YELLOW),
@@ -165,7 +62,6 @@ fn main() -> rltk::BError {
         })
         .with(Player {})
         .build();
-    gs.ecs.insert(new_map());
 
     rltk::main_loop(context, gs)
 }
