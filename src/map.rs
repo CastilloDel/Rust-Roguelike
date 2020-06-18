@@ -1,6 +1,11 @@
 use super::Rect;
 use rltk::{Algorithm2D, BaseMap, Point, RandomNumberGenerator, Rltk, RGB};
+use specs::prelude::*;
 use std::cmp::{max, min};
+
+const MAPWIDTH: usize = 80;
+const MAPHEIGHT: usize = 43;
+const MAPCOUNT: usize = MAPHEIGHT * MAPWIDTH;
 
 #[derive(PartialEq, Copy, Clone)]
 pub enum TileType {
@@ -8,6 +13,7 @@ pub enum TileType {
     Floor,
 }
 
+#[derive(Default)]
 pub struct Map {
     pub tiles: Vec<TileType>,
     pub rooms: Vec<Rect>,
@@ -15,6 +21,8 @@ pub struct Map {
     pub height: i32,
     pub revealed_tiles: Vec<bool>,
     pub visible_tiles: Vec<bool>,
+    pub blocked: Vec<bool>,
+    pub tile_content: Vec<Vec<Entity>>,
 }
 
 impl Algorithm2D for Map {
@@ -26,6 +34,49 @@ impl Algorithm2D for Map {
 impl BaseMap for Map {
     fn is_opaque(&self, index: usize) -> bool {
         self.tiles[index as usize] == TileType::Wall
+    }
+
+    fn get_available_exits(&self, index: usize) -> rltk::SmallVec<[(usize, f32); 10]> {
+        let mut exits = rltk::SmallVec::new();
+        let x = index as i32 % self.width;
+        let y = index as i32 / self.width;
+        let w = self.width as usize;
+        // Cardinal directions
+        if self.is_exit_valid(x - 1, y) {
+            exits.push((index - 1, 1.0))
+        };
+        if self.is_exit_valid(x + 1, y) {
+            exits.push((index + 1, 1.0))
+        };
+        if self.is_exit_valid(x, y - 1) {
+            exits.push((index - w, 1.0))
+        };
+        if self.is_exit_valid(x, y + 1) {
+            exits.push((index + w, 1.0))
+        };
+
+        // Diagonals
+        if self.is_exit_valid(x - 1, y - 1) {
+            exits.push(((index - w) - 1, 1.45));
+        }
+        if self.is_exit_valid(x + 1, y - 1) {
+            exits.push(((index - w) + 1, 1.45));
+        }
+        if self.is_exit_valid(x - 1, y + 1) {
+            exits.push(((index + w) - 1, 1.45));
+        }
+        if self.is_exit_valid(x + 1, y + 1) {
+            exits.push(((index + w) + 1, 1.45));
+        }
+
+        exits
+    }
+
+    fn get_pathing_distance(&self, index1: usize, index2: usize) -> f32 {
+        let w = self.width as usize;
+        let p1 = Point::new(index1 % w, index1 / w);
+        let p2 = Point::new(index2 % w, index2 / w);
+        rltk::DistanceAlg::Pythagoras.distance2d(p1, p2)
     }
 }
 
@@ -64,12 +115,14 @@ impl Map {
     ///This function generates a better looking map with rooms and corridors
     pub fn new_map() -> Map {
         let mut map = Map {
-            tiles: vec![TileType::Wall; 80 * 50],
+            tiles: vec![TileType::Wall; MAPCOUNT],
             rooms: Vec::new(),
-            width: 80,
-            height: 50,
-            revealed_tiles: vec![false; 80 * 50],
-            visible_tiles: vec![false; 80 * 50],
+            width: MAPWIDTH as i32,
+            height: MAPHEIGHT as i32,
+            revealed_tiles: vec![false; MAPCOUNT],
+            visible_tiles: vec![false; MAPCOUNT],
+            blocked: vec![false; MAPCOUNT],
+            tile_content: vec![Vec::new(); MAPCOUNT],
         };
 
         const MAX_ROOMS: i32 = 30;
@@ -81,8 +134,8 @@ impl Map {
         for _ in 0..MAX_ROOMS {
             let w = rng.range(MIN_SIZE, MAX_SIZE);
             let h = rng.range(MIN_SIZE, MAX_SIZE);
-            let x = rng.roll_dice(1, 80 - w - 1) - 1;
-            let y = rng.roll_dice(1, 50 - h - 1) - 1;
+            let x = rng.roll_dice(1, map.width - w - 1) - 1;
+            let y = rng.roll_dice(1, map.height - h - 1) - 1;
             let new_room = Rect::new(x, y, w, h);
             if !map.rooms.iter().any(|x| new_room.intersect(x)) {
                 map.apply_room_to_map(&new_room);
@@ -104,9 +157,31 @@ impl Map {
 
         map
     }
+
+    fn is_exit_valid(&self, x: i32, y: i32) -> bool {
+        if x < 1 || x > self.width - 1 || y < 1 || y > self.height - 1 {
+            return false;
+        }
+        let index = self.xy_index(x, y);
+        !self.blocked[index]
+    }
+
+    pub fn populate_blocked(&mut self) {
+        for (i, tile) in self.tiles.iter_mut().enumerate() {
+            self.blocked[i] = *tile == TileType::Wall;
+        }
+    }
+
+    pub fn clear_content_index(&mut self) {
+        for content in self.tile_content.iter_mut() {
+            content.clear();
+        }
+    }
 }
 
-pub fn draw_map(map: &Map, ctx: &mut Rltk) {
+pub fn draw_map(ecs: &World, ctx: &mut Rltk) {
+    let map = ecs.fetch::<Map>();
+
     let mut y = 0;
     let mut x = 0;
     for (index, tile) in map.tiles.iter().enumerate() {
@@ -132,7 +207,7 @@ pub fn draw_map(map: &Map, ctx: &mut Rltk) {
 
         // Move the coordinates
         x += 1;
-        if x > 79 {
+        if x > MAPWIDTH as i32 - 1 {
             x = 0;
             y += 1;
         }
