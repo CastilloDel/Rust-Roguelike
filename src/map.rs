@@ -3,9 +3,9 @@ use rltk::{Algorithm2D, BaseMap, Point, RandomNumberGenerator, Rltk, RGB};
 use specs::prelude::*;
 use std::cmp::{max, min};
 
-const MAPWIDTH: usize = 80;
-const MAPHEIGHT: usize = 43;
-const MAPCOUNT: usize = MAPHEIGHT * MAPWIDTH;
+pub const MAPWIDTH: usize = 80;
+pub const MAPHEIGHT: usize = 43;
+pub const MAPCOUNT: usize = MAPHEIGHT * MAPWIDTH;
 
 #[derive(PartialEq, Copy, Clone)]
 pub enum TileType {
@@ -97,7 +97,7 @@ impl Map {
     fn apply_horizontal_tunnel(&mut self, x1: i32, x2: i32, y: i32) {
         for x in min(x1, x2)..=max(x1, x2) {
             let index = self.xy_index(x, y);
-            if index > 0 && index < 80 * 50 {
+            if index > 0 && index < MAPCOUNT {
                 self.tiles[index as usize] = TileType::Floor;
             }
         }
@@ -106,7 +106,7 @@ impl Map {
     fn apply_vertical_tunnel(&mut self, y1: i32, y2: i32, x: i32) {
         for y in min(y1, y2)..=max(y1, y2) {
             let index = self.xy_index(x, y);
-            if index > 0 && index < 80 * 50 {
+            if index > 0 && index < MAPCOUNT {
                 self.tiles[index as usize] = TileType::Floor;
             }
         }
