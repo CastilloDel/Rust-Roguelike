@@ -182,7 +182,11 @@ impl GameState for State {
                         }
                     }
                     gui::MainMenuResult::Selected { selected } => match selected {
-                        gui::MainMenuSelection::NewGame => newrunstate = RunState::PreRun,
+                        gui::MainMenuSelection::NewGame => {
+                            saveload_system::delete_everything(&mut self.ecs);
+                            create_world(&mut self.ecs);
+                            newrunstate = RunState::PreRun;
+                        }
                         gui::MainMenuSelection::LoadGame => {
                             saveload_system::load_game(&mut self.ecs);
                             newrunstate = RunState::AwaitingInput;
@@ -261,26 +265,30 @@ fn main() -> rltk::BError {
     gs.ecs.register::<SimpleMarker<SerializeMe>>();
     gs.ecs.register::<SerializationHelper>();
 
-    gs.ecs.insert(SimpleMarkerAllocator::<SerializeMe>::new());
+    create_world(&mut gs.ecs);
+
+    rltk::main_loop(context, gs)
+}
+
+fn create_world(ecs: &mut World) {
+    ecs.insert(SimpleMarkerAllocator::<SerializeMe>::new());
 
     let map = Map::new_map();
     let (player_x, player_y) = map.rooms[0].center();
 
-    let player_entity = spawner::player(&mut gs.ecs, player_x, player_y);
+    let player_entity = spawner::player(ecs, player_x, player_y);
 
-    gs.ecs.insert(rltk::RandomNumberGenerator::new());
+    ecs.insert(rltk::RandomNumberGenerator::new());
     for room in map.rooms.iter().skip(1) {
-        spawner::spawn_room(&mut gs.ecs, room);
+        spawner::spawn_room(ecs, room);
     }
-    gs.ecs.insert(map);
-    gs.ecs.insert(Point::new(player_x, player_y));
-    gs.ecs.insert(player_entity);
-    gs.ecs.insert(RunState::MainMenu {
+    ecs.insert(map);
+    ecs.insert(Point::new(player_x, player_y));
+    ecs.insert(player_entity);
+    ecs.insert(RunState::MainMenu {
         menu_selection: gui::MainMenuSelection::NewGame,
     });
-    gs.ecs.insert(gamelog::GameLog {
+    ecs.insert(gamelog::GameLog {
         entries: vec!["Welcome to Rusty Roguelike".to_string()],
     });
-
-    rltk::main_loop(context, gs)
 }

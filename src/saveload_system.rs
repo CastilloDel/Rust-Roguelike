@@ -102,17 +102,18 @@ pub fn delete_save() {
     }
 }
 
-pub fn load_game(ecs: &mut World) {
-    {
-        // Delete everything
-        let mut to_delete = Vec::new();
-        for e in ecs.entities().join() {
-            to_delete.push(e);
-        }
-        for del in to_delete.iter() {
-            ecs.delete_entity(*del).expect("Deletion failed");
-        }
+pub fn delete_everything(ecs: &mut World) {
+    let mut to_delete = Vec::new();
+    for e in ecs.entities().join() {
+        to_delete.push(e);
     }
+    for del in to_delete.iter() {
+        ecs.delete_entity(*del).expect("Deletion failed");
+    }
+}
+
+pub fn load_game(ecs: &mut World) {
+    delete_everything(ecs);
 
     let data = fs::read_to_string("./savegame.json").unwrap();
     let mut de = serde_json::Deserializer::from_str(&data);
