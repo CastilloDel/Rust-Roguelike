@@ -25,6 +25,7 @@ mod inventory_system;
 use inventory_system::{ItemCollectionSystem, ItemDropSystem, ItemUseSystem};
 mod gamelog;
 mod gui;
+mod random_table;
 mod saveload_system;
 mod spawner;
 
@@ -283,16 +284,17 @@ impl State {
 
         // Build a new map and place the player
         let worldmap;
+        let current_depth;
         {
             let mut worldmap_resource = self.ecs.write_resource::<Map>();
-            let current_depth = worldmap_resource.depth;
+            current_depth = worldmap_resource.depth;
             *worldmap_resource = Map::new_map(current_depth + 1);
             worldmap = worldmap_resource.clone();
         }
 
         // Spawn bad guys
         for room in worldmap.rooms.iter().skip(1) {
-            spawner::spawn_room(&mut self.ecs, room);
+            spawner::spawn_room(&mut self.ecs, room, current_depth + 1);
         }
 
         // Place the player and update resources
@@ -371,7 +373,7 @@ fn create_world(ecs: &mut World) {
 
     ecs.insert(rltk::RandomNumberGenerator::new());
     for room in map.rooms.iter().skip(1) {
-        spawner::spawn_room(ecs, room);
+        spawner::spawn_room(ecs, room, 1);
     }
     ecs.insert(map);
     ecs.insert(Point::new(player_x, player_y));
