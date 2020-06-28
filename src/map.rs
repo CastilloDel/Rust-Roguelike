@@ -220,7 +220,8 @@ pub fn draw_map(ecs: &World, ctx: &mut Rltk) {
                 bg = RGB::from_f32(0.75, 0., 0.);
             }
             if !map.visible_tiles[index] {
-                fg = fg.to_greyscale()
+                fg = fg.to_greyscale();
+                bg = RGB::from_f32(0., 0., 0.); // Don't show stains out of visual range
             }
             ctx.set(x, y, fg, bg, glyph);
         }
