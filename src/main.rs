@@ -25,6 +25,7 @@ mod inventory_system;
 use inventory_system::{ItemCollectionSystem, ItemDropSystem, ItemRemoveSystem, ItemUseSystem};
 mod gamelog;
 mod gui;
+mod particle_system;
 mod random_table;
 mod saveload_system;
 mod spawner;
@@ -57,6 +58,7 @@ pub struct State {
 impl GameState for State {
     fn tick(&mut self, ctx: &mut Rltk) {
         ctx.cls();
+        particle_system::cull_dead_particles(&mut self.ecs, ctx);
 
         let mut newrunstate;
         {
@@ -271,6 +273,9 @@ impl State {
         drop_items.run_now(&self.ecs);
         let mut item_remove = ItemRemoveSystem {};
         item_remove.run_now(&self.ecs);
+        let mut particles = particle_system::ParticleSpawnSystem {};
+        particles.run_now(&self.ecs);
+
         self.ecs.maintain();
     }
 
@@ -448,6 +453,9 @@ fn main() -> rltk::BError {
     gs.ecs.register::<MeleePowerBonus>();
     gs.ecs.register::<DefenseBonus>();
     gs.ecs.register::<WantsToRemoveItem>();
+    gs.ecs.register::<ParticleLifetime>();
+
+    gs.ecs.insert(particle_system::ParticleBuilder::new());
 
     create_world(&mut gs.ecs);
 

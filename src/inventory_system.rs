@@ -1,7 +1,8 @@
 use super::{
-    gamelog::GameLog, AreaOfEffect, CombatStats, Confusion, Consumable, Equippable, Equipped,
-    InBackpack, InflictsDamage, Map, Name, Position, ProvidesHealing, SufferDamage,
-    WantsToDropItem, WantsToPickupItem, WantsToUseItem, WantsToRemoveItem
+    gamelog::GameLog, particle_system::ParticleBuilder, AreaOfEffect, CombatStats, Confusion,
+    Consumable, Equippable, Equipped, InBackpack, InflictsDamage, Map, Name, Position,
+    ProvidesHealing, SufferDamage, WantsToDropItem, WantsToPickupItem, WantsToRemoveItem,
+    WantsToUseItem,
 };
 use specs::prelude::*;
 
@@ -66,6 +67,8 @@ impl<'a> System<'a> for ItemUseSystem {
         ReadStorage<'a, Equippable>,
         WriteStorage<'a, Equipped>,
         WriteStorage<'a, InBackpack>,
+        WriteExpect<'a, ParticleBuilder>,
+        ReadStorage<'a, Position>,
     );
 
     fn run(&mut self, data: Self::SystemData) {
@@ -86,6 +89,8 @@ impl<'a> System<'a> for ItemUseSystem {
             equippable,
             mut equipped,
             mut backpack,
+            mut particle_builder,
+            positions,
         ) = data;
 
         for (entity, useitem) in (&entities, &wants_use).join() {
@@ -119,6 +124,14 @@ impl<'a> System<'a> for ItemUseSystem {
                                 for mob in map.tile_content[index].iter() {
                                     targets.push(*mob);
                                 }
+                                particle_builder.request(
+                                    tile_index.x,
+                                    tile_index.y,
+                                    rltk::RGB::named(rltk::ORANGE),
+                                    rltk::RGB::named(rltk::BLACK),
+                                    rltk::to_cp437('░'),
+                                    200.0,
+                                );
                             }
                         }
                     }
@@ -190,6 +203,18 @@ impl<'a> System<'a> for ItemUseSystem {
                                 ));
                             }
                             used_item = true;
+
+                            let pos = positions.get(*target);
+                            if let Some(pos) = pos {
+                                particle_builder.request(
+                                    pos.x,
+                                    pos.y,
+                                    rltk::RGB::named(rltk::GREEN),
+                                    rltk::RGB::named(rltk::BLACK),
+                                    rltk::to_cp437('♥'),
+                                    200.0,
+                                );
+                            }
                         }
                     }
                 }
@@ -211,6 +236,18 @@ impl<'a> System<'a> for ItemUseSystem {
                             ));
                         }
                         used_item = true;
+
+                        let pos = positions.get(*mob);
+                        if let Some(pos) = pos {
+                            particle_builder.request(
+                                pos.x,
+                                pos.y,
+                                rltk::RGB::named(rltk::RED),
+                                rltk::RGB::named(rltk::BLACK),
+                                rltk::to_cp437('‼'),
+                                200.0,
+                            );
+                        }
                     }
                 }
             }
@@ -232,6 +269,18 @@ impl<'a> System<'a> for ItemUseSystem {
                             ));
                         }
                         used_item = true;
+
+                        let pos = positions.get(*mob);
+                        if let Some(pos) = pos {
+                            particle_builder.request(
+                                pos.x,
+                                pos.y,
+                                rltk::RGB::named(rltk::MAGENTA),
+                                rltk::RGB::named(rltk::BLACK),
+                                rltk::to_cp437('?'),
+                                200.0,
+                            );
+                        }
                     }
                 }
             }
