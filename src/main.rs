@@ -50,6 +50,9 @@ pub enum RunState {
     NextLevel,
     ShowRemoveItem,
     GameOver,
+    MagicMapReveal {
+        row: i32,
+    },
 }
 
 pub struct State {
@@ -102,7 +105,12 @@ impl GameState for State {
             RunState::PlayerTurn => {
                 self.run_systems();
                 self.ecs.maintain();
-                newrunstate = RunState::MonsterTurn;
+                match *self.ecs.fetch::<RunState>() {
+                    RunState::MagicMapReveal { .. } => {
+                        newrunstate = RunState::MagicMapReveal { row: 0 }
+                    }
+                    _ => newrunstate = RunState::MonsterTurn,
+                }
             }
             RunState::MonsterTurn => {
                 self.run_systems();
@@ -242,6 +250,18 @@ impl GameState for State {
                             menu_selection: gui::MainMenuSelection::NewGame,
                         };
                     }
+                }
+            }
+            RunState::MagicMapReveal { row } => {
+                let mut map = self.ecs.fetch_mut::<Map>();
+                for x in 0..MAPWIDTH {
+                    let index = map.xy_index(x as i32, row);
+                    map.revealed_tiles[index] = true;
+                }
+                if row as usize == MAPHEIGHT - 1 {
+                    newrunstate = RunState::MonsterTurn;
+                } else {
+                    newrunstate = RunState::MagicMapReveal { row: row + 1 };
                 }
             }
         }
@@ -459,6 +479,7 @@ fn main() -> rltk::BError {
     gs.ecs.register::<ParticleLifetime>();
     gs.ecs.register::<HungerClock>();
     gs.ecs.register::<ProvidesFood>();
+    gs.ecs.register::<MagicMapper>();
 
     gs.ecs.insert(particle_system::ParticleBuilder::new());
 
