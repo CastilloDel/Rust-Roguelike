@@ -359,40 +359,15 @@ impl State {
         }
 
         // Build a new map and place the player
-        let mut builder;
         let current_depth;
-        let player_start;
         {
-            let mut worldmap_resource = self.ecs.write_resource::<Map>();
+            let worldmap_resource = self.ecs.write_resource::<Map>();
             current_depth = worldmap_resource.depth;
-            builder = map_builders::random_builder(current_depth + 1);
-            builder.build_map();
-            *worldmap_resource = builder.get_map();
-            player_start = builder.get_starting_position();
         }
-
-        // Spawn bad guys
-        builder.spawn_entities(&mut self.ecs);
-
-        // Place the player and update resources
-        let mut player_position = self.ecs.write_resource::<Point>();
-        *player_position = Point::new(player_start.x, player_start.y);
-        let mut position_components = self.ecs.write_storage::<Position>();
-        let player_entity = self.ecs.fetch::<Entity>();
-        let player_pos_comp = position_components.get_mut(*player_entity);
-        if let Some(player_pos_comp) = player_pos_comp {
-            player_pos_comp.x = player_start.x;
-            player_pos_comp.y = player_start.y;
-        }
-
-        // Mark the player's visibility as dirty
-        let mut viewshed_components = self.ecs.write_storage::<Viewshed>();
-        let vs = viewshed_components.get_mut(*player_entity);
-        if let Some(vs) = vs {
-            vs.dirty = true;
-        }
+        self.generate_world_map(current_depth + 1);
 
         // Notify the player and give them some health
+        let player_entity = self.ecs.fetch::<Entity>();
         let mut gamelog = self.ecs.fetch_mut::<gamelog::GameLog>();
         gamelog
             .entries
@@ -414,12 +389,21 @@ impl State {
             self.ecs.delete_entity(*del).expect("Deletion failed");
         }
 
-        // Build a new map and place the player
-        let mut builder = map_builders::random_builder(1);
+        {
+            let player_entity = spawner::player(&mut self.ecs, 0, 0);
+            let mut player_entity_writer = self.ecs.write_resource::<Entity>();
+            *player_entity_writer = player_entity;
+        }
+
+        self.generate_world_map(1);
+    }
+
+    fn generate_world_map(&mut self, new_depth: i32) {
+        let mut builder = map_builders::random_builder(new_depth);
+        builder.build_map();
         let player_start;
         {
             let mut worldmap_resource = self.ecs.write_resource::<Map>();
-            builder.build_map();
             *worldmap_resource = builder.get_map();
             player_start = builder.get_starting_position();
         }
@@ -428,21 +412,20 @@ impl State {
         builder.spawn_entities(&mut self.ecs);
 
         // Place the player and update resources
-        let player_entity = spawner::player(&mut self.ecs, player_start.x, player_start.y);
+        let (player_x, player_y) = (player_start.x, player_start.y);
         let mut player_position = self.ecs.write_resource::<Point>();
-        *player_position = Point::new(player_start.x, player_start.y);
+        *player_position = Point::new(player_x, player_y);
         let mut position_components = self.ecs.write_storage::<Position>();
-        let mut player_entity_writer = self.ecs.write_resource::<Entity>();
-        *player_entity_writer = player_entity;
-        let player_pos_comp = position_components.get_mut(player_entity);
+        let player_entity = self.ecs.fetch::<Entity>();
+        let player_pos_comp = position_components.get_mut(*player_entity);
         if let Some(player_pos_comp) = player_pos_comp {
-            player_pos_comp.x = player_start.x;
-            player_pos_comp.y = player_start.y;
+            player_pos_comp.x = player_x;
+            player_pos_comp.y = player_y;
         }
 
         // Mark the player's visibility as dirty
         let mut viewshed_components = self.ecs.write_storage::<Viewshed>();
-        let vs = viewshed_components.get_mut(player_entity);
+        let vs = viewshed_components.get_mut(*player_entity);
         if let Some(vs) = vs {
             vs.dirty = true;
         }
@@ -491,27 +474,18 @@ fn main() -> rltk::BError {
     gs.ecs.register::<EntityMoved>();
     gs.ecs.register::<SingleActivation>();
 
-    gs.ecs.insert(particle_system::ParticleBuilder::new());
-
     create_world(&mut gs.ecs);
+    gs.generate_world_map(1);
 
     rltk::main_loop(context, gs)
 }
 
 fn create_world(ecs: &mut World) {
     ecs.insert(SimpleMarkerAllocator::<SerializeMe>::new());
-
-    let mut builder = map_builders::random_builder(1);
-    builder.build_map();
-    let map = builder.get_map();
-    let player_start = builder.get_starting_position();
-
-    let player_entity = spawner::player(ecs, player_start.x, player_start.y);
-
+    ecs.insert(Map::new(1));
+    ecs.insert(Point::new(0, 0));
+    let player_entity = spawner::player(ecs, 0, 0);
     ecs.insert(rltk::RandomNumberGenerator::new());
-    builder.spawn_entities(ecs);
-    ecs.insert(map);
-    ecs.insert(Point::new(player_start.x, player_start.y));
     ecs.insert(player_entity);
     ecs.insert(RunState::MainMenu {
         menu_selection: gui::MainMenuSelection::NewGame,
@@ -519,4 +493,5 @@ fn create_world(ecs: &mut World) {
     ecs.insert(gamelog::GameLog {
         entries: vec!["Welcome to Rusty Roguelike".to_string()],
     });
+    ecs.insert(particle_system::ParticleBuilder::new());
 }
