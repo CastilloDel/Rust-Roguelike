@@ -3,6 +3,7 @@ use rltk::{GameState, Point, Rltk};
 use specs::prelude::*;
 use specs::saveload::{SimpleMarker, SimpleMarkerAllocator};
 
+pub mod camera;
 mod components;
 pub use components::*;
 mod map;
@@ -32,6 +33,9 @@ mod random_table;
 mod saveload_system;
 mod spawner;
 mod trigger_system;
+
+const MAP_WIDHT: i32 = 64;
+const MAP_HEIGHT: i32 = 64;
 
 #[derive(PartialEq, Copy, Clone)]
 pub enum RunState {
@@ -75,26 +79,8 @@ impl GameState for State {
         match newrunstate {
             RunState::MainMenu { .. } => {}
             _ => {
-                draw_map(&self.ecs, ctx);
-
-                {
-                    let positions = self.ecs.read_storage::<Position>();
-                    let renderables = self.ecs.read_storage::<Renderable>();
-                    let hidden = self.ecs.read_storage::<Hidden>();
-                    let map = self.ecs.fetch::<Map>();
-
-                    let mut data = (&positions, &renderables, !&hidden)
-                        .join()
-                        .collect::<Vec<_>>();
-                    data.sort_by(|&a, &b| b.1.render_order.cmp(&a.1.render_order));
-                    for (pos, render, _hidden) in data.iter() {
-                        let index = map.xy_index(pos.x, pos.y);
-                        if map.visible_tiles[index] {
-                            ctx.set(pos.x, pos.y, render.fg, render.bg, render.glyph)
-                        }
-                    }
-                    gui::draw_ui(&self.ecs, ctx);
-                }
+                camera::render_camera(&self.ecs, ctx);
+                gui::draw_ui(&self.ecs, ctx);
             }
         }
 
@@ -259,11 +245,11 @@ impl GameState for State {
             }
             RunState::MagicMapReveal { row } => {
                 let mut map = self.ecs.fetch_mut::<Map>();
-                for x in 0..MAPWIDTH {
+                for x in 0..map.width {
                     let index = map.xy_index(x as i32, row);
                     map.revealed_tiles[index] = true;
                 }
-                if row as usize == MAPHEIGHT - 1 {
+                if row == map.height - 1 {
                     newrunstate = RunState::MonsterTurn;
                 } else {
                     newrunstate = RunState::MagicMapReveal { row: row + 1 };
@@ -399,7 +385,7 @@ impl State {
     }
 
     fn generate_world_map(&mut self, new_depth: i32) {
-        let mut builder = map_builders::random_builder(new_depth);
+        let mut builder = map_builders::random_builder(new_depth, MAP_WIDHT, MAP_HEIGHT);
         builder.build_map();
         let player_start;
         {
@@ -482,7 +468,7 @@ fn main() -> rltk::BError {
 
 fn create_world(ecs: &mut World) {
     ecs.insert(SimpleMarkerAllocator::<SerializeMe>::new());
-    ecs.insert(Map::new(1));
+    ecs.insert(Map::new(1, 64, 64));
     ecs.insert(Point::new(0, 0));
     let player_entity = spawner::player(ecs, 0, 0);
     ecs.insert(rltk::RandomNumberGenerator::new());

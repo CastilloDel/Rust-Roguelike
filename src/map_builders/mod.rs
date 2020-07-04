@@ -13,11 +13,11 @@ pub trait MapBuilder {
     fn get_starting_position(&self) -> Position;
 }
 
-pub fn random_builder(new_depth: i32) -> Box<dyn MapBuilder> {
+pub fn random_builder(new_depth: i32, width: i32, height: i32) -> Box<dyn MapBuilder> {
     let mut rng = rltk::RandomNumberGenerator::new();
     let builder = rng.roll_dice(1, 2);
     match builder {
-        1 => Box::new(BspDungeonBuilder::new(new_depth)),
-        _ => Box::new(SimpleMapBuilder::new(new_depth)),
+        1 => Box::new(BspDungeonBuilder::new(new_depth, width, height)),
+        _ => Box::new(SimpleMapBuilder::new(new_depth, width, height)),
     }
 }

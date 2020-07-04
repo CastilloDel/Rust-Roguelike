@@ -1,6 +1,6 @@
 use super::{
-    gamelog::GameLog, CombatStats, Equipped, Hidden, HungerClock, HungerState, InBackpack, Map,
-    Name, Player, Position, RunState, State, Viewshed,
+    camera, gamelog::GameLog, CombatStats, Equipped, Hidden, HungerClock, HungerState, InBackpack,
+    Map, Name, Player, Position, RunState, State, Viewshed,
 };
 use rltk::{Point, Rltk, VirtualKeyCode, RGB};
 use specs::prelude::*;
@@ -87,19 +87,29 @@ pub fn draw_ui(ecs: &World, ctx: &mut Rltk) {
 }
 
 fn draw_tooltips(ecs: &World, ctx: &mut Rltk) {
+    let (min_x, _max_x, min_y, _max_y) = camera::get_screen_bounds(ecs, ctx);
     let map = ecs.fetch::<Map>();
     let names = ecs.read_storage::<Name>();
     let positions = ecs.read_storage::<Position>();
     let hidden = ecs.read_storage::<Hidden>();
 
     let mouse_pos = ctx.mouse_pos();
-    if mouse_pos.0 >= map.width || mouse_pos.1 >= map.height {
+    let mut mouse_map_pos = mouse_pos;
+    mouse_map_pos.0 += min_x;
+    mouse_map_pos.1 += min_y;
+    if mouse_map_pos.0 >= map.width - 1
+        || mouse_map_pos.1 >= map.height - 1
+        || mouse_map_pos.0 < 1
+        || mouse_map_pos.1 < 1
+    {
+        return;
+    }
+    if !map.visible_tiles[map.xy_index(mouse_map_pos.0, mouse_map_pos.1)] {
         return;
     }
     let mut tooltip: Vec<String> = Vec::new();
     for (name, position, _hidden) in (&names, &positions, !&hidden).join() {
-        let index = map.xy_index(position.x, position.y);
-        if position.x == mouse_pos.0 && position.y == mouse_pos.1 && map.visible_tiles[index] {
+        if position.x == mouse_map_pos.0 && position.y == mouse_map_pos.1 {
             tooltip.push(name.name.to_string());
         }
     }
@@ -366,6 +376,7 @@ pub fn ranged_target(
     range: i32,
     radius: i32,
 ) -> (ItemMenuResult, Option<Point>) {
+    let (min_x, max_x, min_y, max_y) = camera::get_screen_bounds(&gs.ecs, ctx);
     let player_entity = gs.ecs.fetch::<Entity>();
     let player_pos = gs.ecs.fetch::<Point>();
     let viewsheds = gs.ecs.read_storage::<Viewshed>();
@@ -386,8 +397,16 @@ pub fn ranged_target(
         for index in visible.visible_tiles.iter() {
             let distance = rltk::DistanceAlg::Pythagoras.distance2d(*player_pos, *index);
             if distance <= range as f32 {
-                ctx.set_bg(index.x, index.y, RGB::named(rltk::BLUE));
-                available_cells.push(index);
+                let screen_x = index.x - min_x;
+                let screen_y = index.y - min_y;
+                if screen_x > 1
+                    && screen_x < (max_x - min_x) - 1
+                    && screen_y > 1
+                    && screen_y < (max_y - min_y) - 1
+                {
+                    ctx.set_bg(screen_x, screen_y, RGB::named(rltk::BLUE));
+                    available_cells.push(index);
+                }
             }
         }
     } else {
@@ -396,9 +415,12 @@ pub fn ranged_target(
 
     // Draw mouse cursor and range
     let mouse_pos = ctx.mouse_pos();
+    let mut mouse_map_pos = mouse_pos;
+    mouse_map_pos.0 += min_x;
+    mouse_map_pos.1 += min_y;
     let mut valid_target = false;
     for index in available_cells.iter() {
-        if index.x == mouse_pos.0 && index.y == mouse_pos.1 {
+        if index.x == mouse_map_pos.0 && index.y == mouse_map_pos.1 {
             valid_target = true;
         }
     }
@@ -407,8 +429,8 @@ pub fn ranged_target(
         if radius > 0 {
             let mut blast_tiles = rltk::field_of_view(
                 Point {
-                    x: mouse_pos.0,
-                    y: mouse_pos.1,
+                    x: mouse_map_pos.0,
+                    y: mouse_map_pos.1,
                 },
                 radius,
                 &*map,
@@ -416,7 +438,11 @@ pub fn ranged_target(
             blast_tiles
                 .retain(|p| p.x > 0 && p.x < map.width - 1 && p.y > 0 && p.y < map.height - 1);
             for tile_index in blast_tiles.iter() {
-                ctx.set_bg(tile_index.x, tile_index.y, RGB::named(rltk::CYAN));
+                ctx.set_bg(
+                    tile_index.x - min_x,
+                    tile_index.y - min_y,
+                    RGB::named(rltk::CYAN),
+                );
             }
         } else {
             ctx.set_bg(mouse_pos.0, mouse_pos.1, RGB::named(rltk::CYAN));

@@ -1,9 +1,9 @@
 use super::{
     random_table::RandomTable, AreaOfEffect, BlocksTile, CombatStats, Confusion, Consumable,
     DefenseBonus, EntryTrigger, EquipmentSlot, Equippable, Hidden, HungerClock, HungerState,
-    InflictsDamage, Item, MagicMapper, MeleePowerBonus, Monster, Name, Player, Position,
+    InflictsDamage, Item, MagicMapper, Map, MeleePowerBonus, Monster, Name, Player, Position,
     ProvidesFood, ProvidesHealing, Ranged, Rect, Renderable, SerializeMe, SingleActivation,
-    Viewshed, MAPWIDTH,
+    Viewshed,
 };
 use rltk::{RandomNumberGenerator, RGB};
 use specs::prelude::*;
@@ -50,6 +50,9 @@ pub fn player(ecs: &mut World, player_x: i32, player_y: i32) -> Entity {
 
 /// Fills a room with stuff!
 pub fn spawn_room(ecs: &mut World, room: &Rect, map_depth: i32) {
+    let map = ecs.fetch::<Map>();
+    let width = map.width as usize;
+    std::mem::drop(map);
     let spawn_table = room_table(map_depth);
     let mut spawn_points: HashMap<usize, String> = HashMap::new();
 
@@ -64,7 +67,7 @@ pub fn spawn_room(ecs: &mut World, room: &Rect, map_depth: i32) {
             while !added && tries < 20 {
                 let x = (room.x1 + rng.roll_dice(1, i32::abs(room.x2 - room.x1))) as usize;
                 let y = (room.y1 + rng.roll_dice(1, i32::abs(room.y2 - room.y1))) as usize;
-                let index = (y * MAPWIDTH) + x;
+                let index = (y * width) + x;
                 if !spawn_points.contains_key(&index) {
                     spawn_points.insert(index, spawn_table.roll(&mut rng));
                     added = true;
@@ -75,8 +78,8 @@ pub fn spawn_room(ecs: &mut World, room: &Rect, map_depth: i32) {
         }
     }
     for spawn in spawn_points.iter() {
-        let x = (*spawn.0 % MAPWIDTH) as i32;
-        let y = (*spawn.0 / MAPWIDTH) as i32;
+        let x = (*spawn.0 % width) as i32;
+        let y = (*spawn.0 / width) as i32;
 
         match spawn.1.as_ref() {
             "Goblin" => goblin(ecs, x, y),

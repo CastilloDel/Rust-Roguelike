@@ -31,9 +31,9 @@ impl MapBuilder for SimpleMapBuilder {
 }
 
 impl SimpleMapBuilder {
-    pub fn new(new_depth: i32) -> SimpleMapBuilder {
+    pub fn new(new_depth: i32, width: i32, height: i32) -> SimpleMapBuilder {
         SimpleMapBuilder {
-            map: Map::new(new_depth),
+            map: Map::new(new_depth, width, height),
             starting_position: Position { x: 0, y: 0 },
             depth: new_depth,
             rooms: Vec::new(),
